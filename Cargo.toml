@@ -16,6 +16,7 @@ build = "build.rs"
 default = ["metrics"]
 metrics = ["prometheus", "tiny_http"]
 metrics_process = ["prometheus/process"]
+http = ["hyper", "hyperlocal"]
 
 [package.metadata.configure_me]
 spec = "internal/config_specification.toml"
@@ -28,6 +29,8 @@ configure_me = "0.4"
 crossbeam-channel = "0.5"
 dirs-next = "2.0"
 env_logger = "0.10"
+hyper = { version = "0.14", optional = true }
+hyperlocal = { version = "0.8", optional = true }
 log = "0.4"
 parking_lot = "0.12"
 prometheus = { version = "0.13", optional = true }
