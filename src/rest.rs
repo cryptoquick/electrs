@@ -9,7 +9,7 @@ use axum::{
 };
 use tower_http::cors::CorsLayer;
 
-use crate::config::Config;
+use crate::{config::Config, electrum::Rpc};
 
 // Transactions
 async fn get_tx() -> Result<impl IntoResponse, AppError> {
@@ -174,7 +174,7 @@ async fn get_fee_estimates() -> Result<impl IntoResponse, AppError> {
 
 /// Esplora HTTP API according to these docs:
 /// <https://github.com/Blockstream/esplora/blob/master/API.md#esplora-http-api>
-pub async fn serve(config: Arc<Config>) -> Result<()> {
+pub async fn serve(config: Arc<Config>, rpc: Arc<Rpc>) -> Result<()> {
     let app = Router::new()
         // Transactions
         .route("/tx/:txid", get(get_tx))

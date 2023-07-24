@@ -51,8 +51,8 @@ impl Peer {
     }
 }
 
-pub fn run() -> Result<()> {
-    let result = serve();
+pub async fn run() -> Result<()> {
+    let result = serve().await;
     if let Err(e) = &result {
         for cause in e.chain() {
             if cause.downcast_ref::<ExitError>().is_some() {
@@ -64,7 +64,7 @@ pub fn run() -> Result<()> {
     result.context("electrs failed")
 }
 
-fn serve() -> Result<()> {
+async fn serve() -> Result<()> {
     let config = Arc::new(Config::from_args());
     let metrics = Metrics::new(config.monitoring_addr)?;
 
@@ -87,13 +87,13 @@ fn serve() -> Result<()> {
         "step",
         metrics::default_duration_buckets(),
     );
-    let mut rpc = Rpc::new(&config, metrics)?;
+    let rpc = Arc::new(Rpc::new(&config, metrics)?);
 
     let new_block_rx = rpc.new_block_notification();
     let mut peers = HashMap::<usize, Peer>::new();
 
     #[cfg(feature = "http")]
-    tokio::task::spawn(rest::serve(config.clone()));
+    tokio::task::spawn(rest::serve(config.clone(), rpc.clone()));
 
     loop {
         // initial sync and compaction may take a few hours

@@ -8,11 +8,15 @@ use crossbeam_channel::Receiver;
 use rayon::prelude::*;
 use serde_derive::Deserialize;
 use serde_json::{self, json, Value};
+use tokio::sync::RwLock;
 
-use std::collections::{hash_map::Entry, HashMap};
 use std::fmt;
 use std::iter::FromIterator;
 use std::str::FromStr;
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use crate::{
     cache::Cache,
@@ -120,7 +124,7 @@ impl RpcError {
 
 /// Electrum RPC handler
 pub struct Rpc {
-    tracker: Tracker,
+    tracker: Arc<RwLock<Tracker>>,
     cache: Cache,
     rpc_duration: Histogram,
     daemon: Daemon,
@@ -139,7 +143,7 @@ impl Rpc {
             metrics::default_duration_buckets(),
         );
 
-        let tracker = Tracker::new(config, metrics)?;
+        let tracker = Arc::new(RwLock::new(Tracker::new(config, metrics)))?;
         let signal = Signal::new();
         let daemon = Daemon::connect(config, signal.exit_flag(), tracker.metrics())?;
         let cache = Cache::new(tracker.metrics());
@@ -162,20 +166,24 @@ impl Rpc {
         self.daemon.new_block_notification()
     }
 
-    pub fn sync(&mut self) -> Result<bool> {
-        self.tracker.sync(&self.daemon, self.signal.exit_flag())
+    pub async fn sync(&self) -> Result<bool> {
+        self.tracker
+            .write()
+            .await
+            .sync(&self.daemon, self.signal.exit_flag())
     }
 
-    pub fn update_client(&self, client: &mut Client) -> Result<Vec<String>> {
+    pub async fn update_client(&self, client: &mut Client) -> Result<Vec<String>> {
         let chain = self.tracker.chain();
         let mut notifications = client
             .scripthashes
             .par_iter_mut()
             .filter_map(|(scripthash, status)| -> Option<Result<Value>> {
-                match self
-                    .tracker
-                    .update_scripthash_status(status, &self.daemon, &self.cache)
-                {
+                match self.tracker.write().await.update_scripthash_status(
+                    status,
+                    &self.daemon,
+                    &self.cache,
+                ) {
                     Ok(true) => Some(Ok(notification(
                         "blockchain.scripthash.subscribe",
                         &[json!(scripthash), json!(status.statushash())],
